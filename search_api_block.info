@@ -1,0 +1,10 @@
+name = Search API Block
+description = Provides a search form block for custom Search API Views.
+type = module
+backdrop = 1.x
+
+dependencies[] = search_api_views
+
+package = Search
+tags[] = search
+tags[] = block

@@ -1,0 +1,232 @@
+<?php
+
+/**
+ * @file module
+ * Search API search form block.
+ */
+
+
+/**
+ * Implements hook_block_info().
+ */
+function search_api_block_block_info() {
+  $blocks['form'] = array(
+    'info' => t('Search API form'),
+    'description' => t('The search API form for searching site content.'),
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_configure().
+ */
+function search_api_block_block_configure($delta = '', $settings = array()) {
+  $form = array();
+
+  if ($delta == 'form') {
+    $search_settings = !empty($settings['search']) ? $settings['search'] : array();
+    $search_settings += array(
+      'label' => '',
+      'label_hide' => FALSE,
+      'placeholder' => '',
+      'button_text' => 'Search',
+      'action_url' => '/search',
+      'input_name' => 'keys',
+    );
+
+    $form['search'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Search API form settings'),
+      '#collapsible' => TRUE,
+    );
+
+    $form['search']['label'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Search box label'),
+      '#default_value' => check_plain($search_settings['label']),
+    );
+    $form['search']['label_hide'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Hide the search box label'),
+      '#default_value' => $search_settings['label_hide'],
+    );
+    $form['search']['placeholder'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Placeholder text'),
+      '#default_value' => check_plain(trim($search_settings['placeholder'])),
+      '#description' => t('This text will appear in the search box until text is entered.'),
+    );
+    $form['search']['button_text'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Button text'),
+      '#default_value' => check_plain(trim($search_settings['button_text'])),
+      '#description' => t('Leave this field empty to hide the submit button.'),
+    );
+    $form['search']['action_url'] = [
+      '#type' => 'textfield',
+      '#title' => t('Search page'),
+      '#description' => t('The search page that the form submits to. Defaults to "/search".'),
+      '#default_value' => $search_settings['action_url'],
+      '#required' => TRUE,
+    ];
+    $form['search']['input_name'] = [
+      '#type' => 'textfield',
+      '#title' => t('Input name'),
+      '#description' => t('The name of the search input. This should be the name of the exposed filter. Defaults to "keys".'),
+      '#default_value' => $search_settings['input_name'],
+      '#required' => TRUE,
+    ];
+
+
+  }
+  return $form;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function search_api_block_block_view($delta = '', $settings = array(), $contexts = array()) {
+  if (user_access('search content')) {
+    $search_settings = !empty($settings['search']) ? $settings['search'] : array();
+    $search_settings += array(
+      'label' => '',
+      'label_hide' => TRUE,
+      'placeholder' => '',
+      'button_text' => 'Search',
+      'action_url' => '',
+      'input_name' => '',
+    );
+
+    $form = backdrop_get_form('search_api_block_form', $search_settings);
+
+    $block['subject'] = t('Search');
+    $block['content'] = $form;
+
+    return $block;
+  }
+}
+
+/**
+ * Implements hook_preprocess_block().
+ */
+function search_api_block_preprocess_block(&$variables) {
+  if ($variables['block']->module == 'search_api_block' && $variables['block']->delta == 'form') {
+    $variables['attributes']['role'] = 'search';
+    $variables['content_attributes']['class'][] = 'container-inline';
+  }
+}
+
+/**
+ * Form builder; Output a search form for the search block's search.
+ *
+ * @ingroup forms
+ * @see search_api_block_form_submit()
+ */
+function search_api_block_form($form, &$form_state, $search_settings) {
+  $form[$search_settings['input_name']] = array(
+    '#type' => 'search',
+    '#title' => t('Search'),
+    '#title_display' => 'invisible',
+    '#size' => 15,
+    '#default_value' => '',
+    '#attributes' => array('title' => t('Enter the keywords you wish to search for.')),
+    '#id' => $search_settings['input_name'],
+  );
+
+  // Show the label.
+  if (!$search_settings['label_hide']) {
+    $form['search_api_block_form']['#title_display'] = 'before';
+
+    // Update the label text.
+    if ($search_settings['label'] != '') {
+      $form['search_api_block_form']['#title'] = t(check_plain($search_settings['label']));
+    }
+  }
+
+  // Add a placeholder.
+  if ($search_settings['placeholder'] != '') {
+    $form['search_api_block_form']['#attributes']['placeholder'] = t(trim($search_settings['placeholder']));
+  }
+
+  $form['action_url'] = array(
+    '#type' => 'hidden',
+    '#value' => $search_settings['action_url'],
+  );
+
+  $form['input_name'] = array(
+    '#type' => 'hidden',
+    '#value' => $search_settings['input_name'],
+  );
+
+  $form['actions'] = array(
+    '#type' => 'actions',
+  );
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search')
+  );
+
+  // Change the button text.
+  if ($search_settings['button_text'] != 'Search') {
+    if ($search_settings['button_text'] == '') {
+      $form['actions']['submit']['#access'] = FALSE;
+    } else {
+      $form['actions']['submit']['#value'] = t(check_plain(trim($search_settings['button_text'])));
+    }
+  }
+
+  if (user_is_logged_in()) {
+    $form['#token'] = FALSE;
+  }
+
+  return $form;
+}
+
+/**
+ * Form validation handler for search_api_block_form().
+ *
+ * @see search_api_block_form_submit()
+ */
+function search_api_block_form_validate(array $form, array &$form_state) {
+  if (!trim($form_state['values'][$form_state['values']['input_name']]))  {
+    form_set_error($form_state['values']['input_name'], t('Please enter at least one keyword.'));
+  }
+}
+
+/**
+ * Form submission handler for search_api_block_form().
+ *
+ * @see search_api_block_form_validate()
+ */
+function search_api_block_form_submit(array $form, array &$form_state) {
+  $input_name = $form_state['values']['input_name'];
+  $keys = trim($form_state['values'][$input_name]);
+
+  $form_state['redirect'] = array(
+    $form_state['values']['action_url'],
+    array(
+      'query' => array(
+        $input_name => $keys
+      )
+    )
+  );
+
+  // To completely control the redirect destination, we need to remove the
+  // 'destination' GET parameter, which would override our destination if
+  // present.
+  unset($_GET['destination']);
+
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function search_api_block_form_layout_block_configure_form_alter(&$form, &$form_state) {
+  // Only alter the search API block's configure form.
+  if ($form_state['block']->module == 'search_api_block' && $form_state['block']->delta == 'form') {
+    // Only hide the block title when the search block is first added.
+    if ($form_state['block']->is_new == TRUE) {
+      $form['title_display']['title_display']['#default_value'] = 'none';
+    }
+  }
+}
